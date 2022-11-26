@@ -7,7 +7,7 @@
       "askForPassword": true,
       "driver": "PostgreSQL",
       "name": "gordon-rs",
-      "database": "postgres",
+      "database": "gordon",
       "username": "postgres"
     }
   ]

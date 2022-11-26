@@ -1,10 +1,6 @@
 use chrono::{DateTime, Utc};
-use once_cell::sync::OnceCell;
-use sqlx::database::HasArguments;
-use sqlx::prelude::*;
-use sqlx::query::Query;
-use sqlx::{postgres::PgPoolOptions, Executor, Pool, Postgres};
-use kafka::producer::Record;
+use sqlx::postgres::PgConnectOptions;
+use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
 #[derive(sqlx::FromRow)]
 pub struct TxRecord {
@@ -15,15 +11,20 @@ pub struct TxRecord {
     pub published_ts: Option<DateTime<Utc>>,
 }
 
-static FETCH_QUERY: &str = "
-  SELECT * FROM dev.transactional_outbox
-  WHERE published_ts IS NULL
-  LIMIT $1";
+static FETCH_QUERY: &str =
+    "SELECT * FROM dev.transactional_outbox WHERE published_ts IS NULL LIMIT $1";
 
 pub async fn build_database() -> Result<Db, sqlx::Error> {
+    let options = PgConnectOptions::new()
+        .host("localhost")
+        .port(5432)
+        .username("postgres")
+        .password("secret")
+        .database("gordon");
+
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect("postgres://postgres@localhost:5432/gordon")
+        .connect_with(options)
         .await?;
 
     Ok(Db { pool })
@@ -51,5 +52,38 @@ impl Db {
         pub_ts: DateTime<Utc>,
     ) -> Result<(), sqlx::Error> {
         todo!("still todo")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[sqlx::test]
+    async fn test_fetch_query(pool: PgPool) -> sqlx::Result<()> {
+        let prefill = sqlx::query(
+            "INSERT INTO dev.transactional_outbox(topic, key, value)
+             VALUES
+                ('hell', decode('', 'hex'),    decode('hey there', 'hex')),
+                ('hell', decode('a', 'hex'),   decode('bye there', 'hex')),
+                ('nurg', decode('xyz', 'hex'), decode('there', 'hex')),
+                ('blrb', decode('abc', 'hex'), decode('here', 'hex')),
+                ('blrb', decode('abc', 'hex'), decode('nowhere', 'hex'))
+            ",
+        )
+        .execute(&pool)
+        .await;
+        // sanity check
+        assert_eq!(prefill.unwrap().rows_affected(), 5);
+
+        let result = sqlx::query_as::<_, TxRecord>(FETCH_QUERY)
+            .bind(5)
+            .fetch_all(&pool)
+            .await;
+        let result = result.unwrap();
+
+        assert!(result.len() <= 5);
+
+        Ok(())
     }
 }

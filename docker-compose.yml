@@ -5,10 +5,11 @@ services:
     restart: always
     environment:
       POSTGRES_PASSWORD: secret
+      POSTGRES_DB: gordon
     ports:
       - "5432:5432" # expose to host
     volumes:
-      - ./setup_test_db.sql:/docker-entrypoint-initdb.d/setup_test_db.sql:ro
+      - ./migrations/setup_test_db.sql:/docker-entrypoint-initdb.d/setup_test_db.sql:ro
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
     container_name: zookeeper

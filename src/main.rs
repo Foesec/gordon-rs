@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
+use gordon::db;
+use gordon::outbox;
+use gordon::publisher;
 use parking_lot::Mutex;
-
-mod db;
-mod publisher;
-mod outbox;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
