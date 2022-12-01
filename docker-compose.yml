@@ -2,6 +2,7 @@ name: gordon
 services:
   db:
     image: postgres:15-bullseye
+    container_name: postgres
     restart: always
     environment:
       POSTGRES_PASSWORD: secret
@@ -9,7 +10,7 @@ services:
     ports:
       - "5432:5432" # expose to host
     volumes:
-      - ./migrations/setup_test_db.sql:/docker-entrypoint-initdb.d/setup_test_db.sql:ro
+      - ./migrations/1_setup-transactional-outbox.sql:/docker-entrypoint-initdb.d/1_setup-transactional-outbox.sql:ro
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
     container_name: zookeeper

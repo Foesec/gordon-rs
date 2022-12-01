@@ -14,17 +14,10 @@ pub struct TxRecord {
 static FETCH_QUERY: &str =
     "SELECT * FROM dev.transactional_outbox WHERE published_ts IS NULL LIMIT $1";
 
-pub async fn build_database() -> Result<Db, sqlx::Error> {
-    let options = PgConnectOptions::new()
-        .host("localhost")
-        .port(5432)
-        .username("postgres")
-        .password("secret")
-        .database("gordon");
-
+pub async fn build_database(conn_opt: PgConnectOptions) -> Result<Db, sqlx::Error> {
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect_with(options)
+        .connect_with(conn_opt)
         .await?;
 
     Ok(Db { pool })
@@ -56,11 +49,12 @@ impl Db {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
+    use sqlx::{migrate::Migrator, sqlx_macros::migrate, PgPool, PgConnection};
 
     #[sqlx::test]
-    async fn test_fetch_query(pool: PgPool) -> sqlx::Result<()> {
+    async fn test_fetch_query(pool: Pool<Postgres>) {
         let prefill = sqlx::query(
             "INSERT INTO dev.transactional_outbox(topic, key, value)
              VALUES
@@ -83,7 +77,5 @@ mod tests {
         let result = result.unwrap();
 
         assert!(result.len() <= 5);
-
-        Ok(())
     }
 }
