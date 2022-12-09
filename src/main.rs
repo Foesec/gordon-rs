@@ -22,19 +22,3 @@ async fn main() -> anyhow::Result<()> {
 
     outbox::start_outbox(&db, publisher).await
 }
-
-#[cfg(test)]
-mod test {
-    #[sqlx::test]
-    async fn basic_test(pool: PgPool) -> sqlx::Result<()> {
-        let mut conn = pool.acquire().await?;
-
-        sqlx::query("SELECT * FROM foo")
-            .fetch_one(&mut conn)
-            .await?;
-
-        assert_eq!(foo.get::<String>("bar"), "foobar!");
-
-        Ok(())
-    }
-}
