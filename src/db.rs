@@ -4,7 +4,7 @@ use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
 #[derive(sqlx::FromRow)]
 pub struct TxRecord {
-    pub id: i64,
+    pub id: i32,
     pub topic: String,
     pub key: Option<Vec<u8>>,
     pub value: Vec<u8>,
@@ -13,6 +13,12 @@ pub struct TxRecord {
 
 static FETCH_QUERY: &str =
     "SELECT * FROM dev.transactional_outbox WHERE published_ts IS NULL LIMIT $1";
+
+static WRITEBACK_PUBLISHED_QUERY: &str = "
+UPDATE dev.transactional_outbox
+SET published_ts = NOW()
+WHERE id = ANY($1)
+";
 
 pub async fn build_database(conn_opt: PgConnectOptions) -> Result<Db, sqlx::Error> {
     let pool = PgPoolOptions::new()
@@ -35,16 +41,31 @@ impl Db {
             .await
     }
 
-    pub async fn write_back_published_records(&self, ids: Vec<i64>) -> Result<(), sqlx::Error> {
-        todo!("still todo")
+    pub async fn write_back_published_records(&self, ids: Vec<i32>) -> Result<u64, sqlx::Error> {
+        let query_result = sqlx::query(WRITEBACK_PUBLISHED_QUERY)
+            .bind(&ids)
+            .execute(&self.pool)
+            .await;
+        query_result.map(|pg_res| pg_res.rows_affected())
     }
 
     pub async fn write_back_published_record(
         &self,
-        id: i64,
+        id: i32,
         pub_ts: DateTime<Utc>,
     ) -> Result<(), sqlx::Error> {
-        todo!("still todo")
+        sqlx::query(
+            "
+UPDATE dev.transactional_outbox
+SET published_ts = $1
+WHERE id = $2
+",
+        )
+        .bind(pub_ts)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 }
 
@@ -63,14 +84,15 @@ mod test {
         let prefill = sqlx::query(
             "INSERT INTO dev.transactional_outbox(topic, key, value, published_ts)
              VALUES
-                ('hell', decode('', 'hex'),    decode('hey there', 'hex'),   NULL),
-                ('hell', decode('a', 'hex'),   decode('bye there', 'hex'),   NULL),
-                ('nurg', decode('xyz', 'hex'), decode('there', 'hex'),       NULL),
-                ('blrb', decode('abc', 'hex'), decode('here', 'hex'),        NULL),
-                ('blrb', decode('abc', 'hex'), decode('nowhere', 'hex'),     NULL),
-                ('BUP',  NULL,                 decode('valuevalue', 'hex'), '2022-12-03T09:39:52+00:00')",
+                ('hell', '',    'hey there',   NULL),
+                ('hell', 'a',   'bye there',   NULL),
+                ('nurg', 'xyz', 'there',       NULL),
+                ('blrb', 'abc', 'here',        NULL),
+                ('blrb', 'abc', 'nowhere',     NULL),
+                ('BUPP', NULL,  'valuevalue', '2022-12-03T09:39:52+00:00')",
         )
-        .execute(xct).await;
+        .execute(xct)
+        .await;
         let result = prefill.unwrap();
         assert_eq!(result.rows_affected(), 6);
         result
@@ -90,13 +112,14 @@ mod test {
     }
 
     #[sqlx::test]
-    async fn test_db__fetch_records_to_publish(pool: PgPool) -> sqlx::Result<()> {
-
+    async fn test_db_fetch_records_to_publish(pool: PgPool) -> sqlx::Result<()> {
         prefill_value(&pool).await;
 
         let db = Db { pool };
 
         let res = db.fetch_records_to_publish(5).await?;
+
+        assert!(res.len() <= 5);
 
         Ok(())
     }
