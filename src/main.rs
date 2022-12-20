@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use gordon::db;
 use gordon::outbox;
-use gordon::publisher;
+use gordon::rdk_publisher as publisher;
 use parking_lot::Mutex;
 use sqlx::postgres::PgConnectOptions;
 
